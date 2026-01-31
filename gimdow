@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""
+Gimdow Lock CLI - Simple command-line tool to control your Gimdow A1 Pro
+
+Usage:
+    ./gimdow unlock
+    ./gimdow status
+"""
+
+import hmac
+import hashlib
+import time
+import json
+import sys
+import os
+import requests
+
+# Configuration - Set these environment variables or edit here
+CLIENT_ID = os.environ.get("TUYA_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("TUYA_CLIENT_SECRET", "")
+DEVICE_ID = os.environ.get("TUYA_DEVICE_ID", "")
+REGION = os.environ.get("TUYA_REGION", "eu")
+
+REGIONS = {
+    "us": "https://openapi.tuyaus.com",
+    "eu": "https://openapi.tuyaeu.com",
+    "cn": "https://openapi.tuyacn.com",
+    "in": "https://openapi.tuyain.com",
+}
+
+
+class TuyaLock:
+    def __init__(self, client_id, client_secret, device_id, region="eu"):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.device_id = device_id
+        self.base_url = REGIONS.get(region, REGIONS["eu"])
+        self.token = None
+        self.token_expiry = 0
+
+    def _sign(self, msg):
+        return hmac.new(
+            self.client_secret.encode(),
+            msg.encode(),
+            hashlib.sha256
+        ).hexdigest().upper()
+
+    def _headers(self, method, path, body="", with_token=True):
+        t = str(int(time.time() * 1000))
+        content_hash = hashlib.sha256(body.encode() if body else b"").hexdigest()
+        sign_str = f"{method}\n{content_hash}\n\n{path}"
+
+        if with_token and self.token:
+            msg = self.client_id + self.token + t + sign_str
+        else:
+            msg = self.client_id + t + sign_str
+
+        h = {
+            "client_id": self.client_id,
+            "sign": self._sign(msg),
+            "t": t,
+            "sign_method": "HMAC-SHA256",
+            "Content-Type": "application/json",
+        }
+        if with_token and self.token:
+            h["access_token"] = self.token
+        return h
+
+    def _request(self, method, path, data=None, with_token=True):
+        url = f"{self.base_url}{path}"
+        body = json.dumps(data) if data else ""
+
+        if method == "GET":
+            r = requests.get(url, headers=self._headers(method, path, body, with_token))
+        else:
+            r = requests.post(url, headers=self._headers(method, path, body, with_token), data=body or None)
+
+        return r.json()
+
+    def auth(self):
+        if time.time() < self.token_expiry - 60:
+            return True
+
+        result = self._request("GET", "/v1.0/token?grant_type=1", with_token=False)
+        if result.get("success"):
+            self.token = result["result"]["access_token"]
+            self.token_expiry = time.time() + result["result"].get("expire_time", 7200)
+            return True
+        print(f"Auth failed: {result.get('msg')}")
+        return False
+
+    def status(self):
+        if not self.auth():
+            return None
+
+        result = self._request("GET", f"/v1.0/devices/{self.device_id}/status")
+        if result.get("success"):
+            return result.get("result", [])
+        print(f"Status failed: {result.get('msg')}")
+        return None
+
+    def info(self):
+        if not self.auth():
+            return None
+
+        result = self._request("GET", f"/v1.0/devices/{self.device_id}")
+        if result.get("success"):
+            return result.get("result", {})
+        print(f"Info failed: {result.get('msg')}")
+        return None
+
+    def _get_ticket(self):
+        result = self._request("POST", f"/v1.0/devices/{self.device_id}/door-lock/password-ticket")
+        if result.get("success"):
+            return result["result"].get("ticket_id")
+        print(f"Ticket failed: {result.get('msg')}")
+        return None
+
+    def unlock(self):
+        if not self.auth():
+            return False
+
+        ticket = self._get_ticket()
+        if not ticket:
+            return False
+
+        # Try password-free open-door first
+        result = self._request(
+            "POST",
+            f"/v1.0/devices/{self.device_id}/door-lock/password-free/open-door",
+            {"ticket_id": ticket}
+        )
+
+        if result.get("success"):
+            return True
+
+        # Fallback to door-operate endpoint
+        result = self._request(
+            "POST",
+            f"/v1.0/smart-lock/devices/{self.device_id}/password-free/door-operate",
+            {"ticket_id": ticket, "open": "true"}
+        )
+
+        if result.get("success"):
+            return True
+
+        print(f"Unlock failed: {result.get('msg')}")
+        return False
+
+    def lock(self):
+        if not self.auth():
+            return False
+
+        ticket = self._get_ticket()
+        if not ticket:
+            return False
+
+        # Use door-operate with open=false to lock
+        result = self._request(
+            "POST",
+            f"/v1.0/smart-lock/devices/{self.device_id}/password-free/door-operate",
+            {"ticket_id": ticket, "open": "false"}
+        )
+
+        if result.get("success"):
+            return True
+
+        print(f"Lock failed: {result.get('msg')}")
+        return False
+
+    def is_locked(self):
+        """Check if door is locked based on lock_motor_state."""
+        status = self.status()
+        if status:
+            for dp in status:
+                if dp.get("code") == "lock_motor_state":
+                    # False = locked, True = unlocked (motor active)
+                    return not dp.get("value", True)
+        return None
+
+
+def main():
+    if not DEVICE_ID:
+        print("ERROR: DEVICE_ID not set!")
+        sys.exit(1)
+
+    if len(sys.argv) < 2:
+        print("Usage: ./gimdow <command>")
+        print("")
+        print("Commands:")
+        print("  unlock   Unlock the door")
+        print("  lock     Lock the door")
+        print("  status   Get lock status")
+        print("  info     Get device info")
+        sys.exit(1)
+
+    cmd = sys.argv[1].lower()
+    lock = TuyaLock(CLIENT_ID, CLIENT_SECRET, DEVICE_ID, REGION)
+
+    if cmd == "unlock":
+        if lock.unlock():
+            print("Door unlocked!")
+        else:
+            print("Failed to unlock door")
+            sys.exit(1)
+
+    elif cmd == "lock":
+        if lock.lock():
+            print("Door locked!")
+        else:
+            print("Failed to lock door")
+            sys.exit(1)
+
+    elif cmd == "status":
+        status = lock.status()
+        if status:
+            print("Lock Status:")
+            for dp in status:
+                code = dp.get('code')
+                value = dp.get('value')
+
+                # Format key values nicely
+                if code == "lock_motor_state":
+                    state = "UNLOCKED" if value else "LOCKED"
+                    print(f"  State: {state}")
+                elif code == "battery_state":
+                    print(f"  Battery: {value}")
+                elif code == "automatic_lock":
+                    print(f"  Auto-lock: {'enabled' if value else 'disabled'}")
+                elif code == "auto_lock_time":
+                    print(f"  Auto-lock time: {value} seconds")
+        else:
+            sys.exit(1)
+
+    elif cmd == "info":
+        info = lock.info()
+        if info:
+            print(f"Name: {info.get('name')}")
+            print(f"ID: {info.get('id')}")
+            print(f"Online: {info.get('online')}")
+            print(f"Category: {info.get('category')}")
+        else:
+            sys.exit(1)
+
+    else:
+        print(f"Unknown command: {cmd}")
+        print("Use: unlock, lock, status, info")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

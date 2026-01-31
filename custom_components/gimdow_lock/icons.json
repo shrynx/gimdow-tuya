@@ -1,0 +1,6 @@
+{
+  "services": {
+    "lock": "mdi:lock",
+    "unlock": "mdi:lock-open"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Tuya Cloud",
+        "description": "Enter your Tuya IoT Platform credentials.\n\nGet them from [iot.tuya.com](https://iot.tuya.com)\n\n1. Create a Cloud Project\n2. Enable 'Smart Lock Open Service' API\n3. Link your Tuya/Smart Life app",
+        "data": {
+          "client_id": "Client ID (Access ID)",
+          "client_secret": "Client Secret (Access Secret)",
+          "region": "Region"
+        }
+      },
+      "select_device": {
+        "title": "Select Lock",
+        "description": "Choose the lock you want to add to Home Assistant.",
+        "data": {
+          "device_id": "Lock"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials. Check your Client ID and Secret.",
+      "cannot_connect": "Cannot connect to Tuya Cloud. Check your internet connection.",
+      "no_devices": "No smart locks found. Make sure you linked your Tuya app and enabled Smart Lock API.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This lock is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "description": "Configure Gimdow Lock options."
+      }
+    }
+  }
+}
