@@ -15,7 +15,7 @@ from .tuya_api import TuyaAPIError, TuyaCloudAPI
 _LOGGER = logging.getLogger(__name__)
 
 # Delays (in seconds) for extra refreshes after a lock/unlock operation.
-_POST_OPERATION_DELAYS = (10, 300)
+_POST_OPERATION_DELAYS = (10, 120, 300)
 
 
 class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
