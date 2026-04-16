@@ -56,10 +56,10 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except TuyaAPIError as err:
             _LOGGER.warning("Failed to refresh device info: %s", err)
 
-        _LOGGER.debug(
-            "Poll for %s — online: %s, status: %s",
-            self.device_id,
-            self.device_info.get("online"),
+        _LOGGER.warning(
+            "GIMDOW POLL — lock_motor_state: %s, manual_lock: %s, full: %s",
+            status.get("lock_motor_state"),
+            status.get("manual_lock"),
             status,
         )
 
