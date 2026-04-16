@@ -183,7 +183,7 @@ class TuyaLock:
         if status:
             for dp in status:
                 if dp.get("code") == "lock_motor_state":
-                    return not self._is_truthy(dp.get("value", True))
+                    return self._is_truthy(dp.get("value", True))
         return None
 
 
@@ -229,8 +229,8 @@ def main():
 
                 # Format key values nicely
                 if code == "lock_motor_state":
-                    motor_active = TuyaLock._is_truthy(value)
-                    state = "UNLOCKED" if motor_active else "LOCKED"
+                    is_locked = TuyaLock._is_truthy(value)
+                    state = "LOCKED" if is_locked else "UNLOCKED"
                     print(f"  State: {state} (raw: {value!r})")
                 elif code == "battery_state":
                     print(f"  Battery: {value}")

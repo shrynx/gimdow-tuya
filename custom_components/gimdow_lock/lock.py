@@ -91,9 +91,9 @@ class GimdowLock(CoordinatorEntity[GimdowLockCoordinator], LockEntity):
         """Return true if lock is locked."""
         status = self.coordinator.data.get("status", {})
 
-        # lock_motor_state: True/truthy = motor active = unlocked
+        # lock_motor_state: True = locked, False = unlocked
         if "lock_motor_state" in status:
-            return not self._is_truthy(status["lock_motor_state"])
+            return self._is_truthy(status["lock_motor_state"])
 
         # Fallback to closed_opened
         if "closed_opened" in status:
