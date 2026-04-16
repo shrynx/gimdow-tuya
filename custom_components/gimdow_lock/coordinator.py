@@ -47,6 +47,7 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             status = await self.api.async_get_device_status(self.device_id)
         except TuyaAPIError as err:
             # Status is critical — if this fails, raise so HA knows.
+            _LOGGER.warning("GIMDOW POLL FAILED for %s: %s", self.device_id, err)
             raise UpdateFailed(f"Error fetching status: {err}") from err
 
         # Device info is best-effort — a failure here should not block
@@ -56,8 +57,8 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except TuyaAPIError as err:
             _LOGGER.warning("Failed to refresh device info: %s", err)
 
-        _LOGGER.debug(
-            "Update for %s — online: %s, status: %s",
+        _LOGGER.warning(
+            "GIMDOW POLL for %s — online: %s, status: %s",
             self.device_id,
             self.device_info.get("online"),
             status,
@@ -82,8 +83,8 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for delay in _POST_OPERATION_DELAYS:
             @callback
             def _refresh(_now, _delay=delay) -> None:
-                _LOGGER.debug(
-                    "Post-operation refresh for %s (after %ss)", self.device_id, _delay
+                _LOGGER.warning(
+                    "GIMDOW post-op refresh for %s (after %ss)", self.device_id, _delay
                 )
                 self.hass.async_create_task(self.async_request_refresh())
 
