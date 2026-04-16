@@ -175,31 +175,29 @@ class TuyaCloudAPI:
             return []
 
     async def async_get_device_status(self, device_id: str) -> dict[str, Any]:
-        """Get device status."""
-        if not await self.async_get_token():
-            return {}
+        """Get device status.
 
-        try:
-            result = await self._request("GET", f"/v1.0/devices/{device_id}/status")
-            status = {}
-            for dp in result.get("result", []):
-                status[dp.get("code")] = dp.get("value")
-            return status
-        except TuyaAPIError as err:
-            _LOGGER.error("Failed to get device status: %s", err)
-            return {}
+        Raises TuyaAPIError on failure so the coordinator can mark the
+        update as failed instead of silently returning empty data.
+        """
+        await self.async_get_token()
+
+        result = await self._request("GET", f"/v1.0/devices/{device_id}/status")
+        status = {}
+        for dp in result.get("result", []):
+            status[dp.get("code")] = dp.get("value")
+        _LOGGER.debug("Device %s status: %s", device_id, status)
+        return status
 
     async def async_get_device_info(self, device_id: str) -> dict[str, Any]:
-        """Get device info."""
-        if not await self.async_get_token():
-            return {}
+        """Get device info.
 
-        try:
-            result = await self._request("GET", f"/v1.0/devices/{device_id}")
-            return result.get("result", {})
-        except TuyaAPIError as err:
-            _LOGGER.error("Failed to get device info: %s", err)
-            return {}
+        Raises TuyaAPIError on failure so callers can handle it.
+        """
+        await self.async_get_token()
+
+        result = await self._request("GET", f"/v1.0/devices/{device_id}")
+        return result.get("result", {})
 
     async def _get_password_ticket(self, device_id: str) -> str | None:
         """Get password ticket for lock operations."""

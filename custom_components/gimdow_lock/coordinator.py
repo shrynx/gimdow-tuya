@@ -9,7 +9,7 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, UPDATE_INTERVAL, DEVICE_INFO_REFRESH_INTERVAL
+from .const import DOMAIN, UPDATE_INTERVAL
 from .tuya_api import TuyaAPIError, TuyaCloudAPI
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,24 +39,23 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.device_id = device_id
         self.device_name = device_name
         self.device_info: dict[str, Any] = {}
-        self._device_info_last_refresh: float = 0
         self._scheduled_refreshes: list[CALLBACK_TYPE] = []
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API."""
         try:
-            # Get device status
+            # Always fetch both status and device info together.
+            # Device info contains the 'online' field which gates entity
+            # availability — stale values cause the entity to vanish.
             status = await self.api.async_get_device_status(self.device_id)
+            self.device_info = await self.api.async_get_device_info(self.device_id)
 
-            # Refresh device info periodically (for online status etc.)
-            import time
-            now = time.monotonic()
-            if (
-                not self.device_info
-                or now - self._device_info_last_refresh > DEVICE_INFO_REFRESH_INTERVAL
-            ):
-                self.device_info = await self.api.async_get_device_info(self.device_id)
-                self._device_info_last_refresh = now
+            _LOGGER.debug(
+                "Update for %s — online: %s, status: %s",
+                self.device_id,
+                self.device_info.get("online"),
+                status,
+            )
 
             return {
                 "status": status,
@@ -83,7 +82,6 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug(
                     "Post-operation refresh for %s (after %ss)", self.device_id, _delay
                 )
-                self.async_set_updated_data(self.data)  # trigger listeners
                 self.hass.async_create_task(self.async_request_refresh())
 
             cancel = async_call_later(self.hass, delay, _refresh)
@@ -93,6 +91,7 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Unlock the door."""
         result = await self.api.async_unlock(self.device_id)
         if result:
+            await self.async_request_refresh()
             self._schedule_delayed_refreshes()
         return result
 
@@ -100,5 +99,6 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Lock the door."""
         result = await self.api.async_lock(self.device_id)
         if result:
+            await self.async_request_refresh()
             self._schedule_delayed_refreshes()
         return result
