@@ -119,60 +119,51 @@ class TuyaCloudAPI:
         except aiohttp.ClientError as err:
             raise TuyaAPIError("connection_error", str(err)) from err
 
-    async def async_get_token(self) -> bool:
-        """Get access token."""
-        if time.time() < self._token_expiry - 60:
-            return True
+    async def async_get_token(self) -> None:
+        """Ensure we have a valid access token.
 
-        try:
-            result = await self._request(
-                "GET",
-                "/v1.0/token?grant_type=1",
-                with_token=False,
-            )
-            token_data = result["result"]
-            self._access_token = token_data["access_token"]
-            self._refresh_token = token_data.get("refresh_token")
-            self._token_expiry = time.time() + token_data.get("expire_time", 7200)
-            self._uid = token_data.get("uid")
-            _LOGGER.debug("Token obtained successfully")
-            return True
-        except TuyaAPIError as err:
-            _LOGGER.error("Failed to get token: %s", err)
-            return False
+        Raises TuyaAPIError if the token cannot be obtained.
+        """
+        if time.time() < self._token_expiry - 60:
+            return
+
+        result = await self._request(
+            "GET",
+            "/v1.0/token?grant_type=1",
+            with_token=False,
+        )
+        token_data = result["result"]
+        self._access_token = token_data["access_token"]
+        self._refresh_token = token_data.get("refresh_token")
+        self._token_expiry = time.time() + token_data.get("expire_time", 7200)
+        self._uid = token_data.get("uid")
+        _LOGGER.debug("Token obtained successfully")
 
     async def async_get_devices(self) -> list[dict[str, Any]]:
         """Get all devices (filtered to locks only)."""
-        if not await self.async_get_token():
-            return []
+        await self.async_get_token()
 
-        try:
-            # Get devices linked to user
-            result = await self._request(
-                "GET",
-                "/v1.0/iot-01/associated-users/devices",
-            )
-            devices = result.get("result", {}).get("devices", [])
+        result = await self._request(
+            "GET",
+            "/v1.0/iot-01/associated-users/devices",
+        )
+        devices = result.get("result", {}).get("devices", [])
 
-            # Filter to lock devices only
-            locks = [
-                {
-                    "id": d.get("id"),
-                    "name": d.get("name", "Unknown Lock"),
-                    "category": d.get("category"),
-                    "online": d.get("online", False),
-                    "product_id": d.get("product_id"),
-                }
-                for d in devices
-                if d.get("category") in LOCK_CATEGORIES
-            ]
+        # Filter to lock devices only
+        locks = [
+            {
+                "id": d.get("id"),
+                "name": d.get("name", "Unknown Lock"),
+                "category": d.get("category"),
+                "online": d.get("online", False),
+                "product_id": d.get("product_id"),
+            }
+            for d in devices
+            if d.get("category") in LOCK_CATEGORIES
+        ]
 
-            _LOGGER.debug("Found %d lock(s)", len(locks))
-            return locks
-
-        except TuyaAPIError as err:
-            _LOGGER.error("Failed to get devices: %s", err)
-            return []
+        _LOGGER.debug("Found %d lock(s)", len(locks))
+        return locks
 
     async def async_get_device_status(self, device_id: str) -> dict[str, Any]:
         """Get device status.
@@ -213,8 +204,7 @@ class TuyaCloudAPI:
 
     async def async_unlock(self, device_id: str) -> bool:
         """Unlock the door."""
-        if not await self.async_get_token():
-            return False
+        await self.async_get_token()
 
         ticket_id = await self._get_password_ticket(device_id)
         if not ticket_id:
@@ -247,8 +237,7 @@ class TuyaCloudAPI:
 
     async def async_lock(self, device_id: str) -> bool:
         """Lock the door."""
-        if not await self.async_get_token():
-            return False
+        await self.async_get_token()
 
         ticket_id = await self._get_password_ticket(device_id)
         if not ticket_id:

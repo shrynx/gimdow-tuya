@@ -44,27 +44,30 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API."""
         try:
-            # Always fetch both status and device info together.
-            # Device info contains the 'online' field which gates entity
-            # availability — stale values cause the entity to vanish.
             status = await self.api.async_get_device_status(self.device_id)
-            self.device_info = await self.api.async_get_device_info(self.device_id)
-
-            _LOGGER.debug(
-                "Update for %s — online: %s, status: %s",
-                self.device_id,
-                self.device_info.get("online"),
-                status,
-            )
-
-            return {
-                "status": status,
-                "info": self.device_info,
-                "online": self.device_info.get("online", False),
-            }
-
         except TuyaAPIError as err:
-            raise UpdateFailed(f"Error fetching data: {err}") from err
+            # Status is critical — if this fails, raise so HA knows.
+            raise UpdateFailed(f"Error fetching status: {err}") from err
+
+        # Device info is best-effort — a failure here should not block
+        # the status update or trigger HA's exponential backoff.
+        try:
+            self.device_info = await self.api.async_get_device_info(self.device_id)
+        except TuyaAPIError as err:
+            _LOGGER.warning("Failed to refresh device info: %s", err)
+
+        _LOGGER.debug(
+            "Update for %s — online: %s, status: %s",
+            self.device_id,
+            self.device_info.get("online"),
+            status,
+        )
+
+        return {
+            "status": status,
+            "info": self.device_info,
+            "online": self.device_info.get("online", True),
+        }
 
     def _cancel_scheduled_refreshes(self) -> None:
         """Cancel any pending post-operation refreshes."""
