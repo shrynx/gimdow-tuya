@@ -46,20 +46,44 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             status = await self.api.async_get_device_status(self.device_id)
         except TuyaAPIError as err:
-            # Status is critical — if this fails, raise so HA knows.
             raise UpdateFailed(f"Error fetching status: {err}") from err
 
-        # Device info is best-effort — a failure here should not block
-        # the status update or trigger HA's exponential backoff.
+        # Fetch open-logs to determine actual lock state, since
+        # lock_motor_state from the status endpoint never changes
+        # on some lock models (e.g. Gimdow A1 Pro).
+        open_logs: list[dict] = []
+        try:
+            open_logs = await self.api.async_get_open_logs(self.device_id)
+        except TuyaAPIError as err:
+            _LOGGER.debug("Failed to fetch open logs: %s", err)
+
+        # Device info is best-effort.
         try:
             self.device_info = await self.api.async_get_device_info(self.device_id)
         except TuyaAPIError as err:
             _LOGGER.warning("Failed to refresh device info: %s", err)
 
-        _LOGGER.warning(
-            "GIMDOW POLL — lock_motor_state: %s, manual_lock: %s, full: %s",
-            status.get("lock_motor_state"),
-            status.get("manual_lock"),
+        # Determine lock state from the most recent log entry.
+        # unlock_* codes mean the door was unlocked.
+        # manual_lock / auto_lock mean the door was locked.
+        # If no recent logs, assume locked (safe default).
+        is_unlocked = False
+        if open_logs:
+            latest = open_logs[0]
+            latest_code = latest.get("status", {}).get("code", "")
+            is_unlocked = latest_code.startswith("unlock_")
+            _LOGGER.debug(
+                "Latest open log: code=%s, time=%s → is_unlocked=%s",
+                latest_code,
+                latest.get("update_time"),
+                is_unlocked,
+            )
+
+        _LOGGER.debug(
+            "Poll for %s — online: %s, is_unlocked: %s, status: %s",
+            self.device_id,
+            self.device_info.get("online"),
+            is_unlocked,
             status,
         )
 
@@ -67,6 +91,8 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "status": status,
             "info": self.device_info,
             "online": self.device_info.get("online", True),
+            "is_unlocked": is_unlocked,
+            "open_logs": open_logs,
         }
 
     def _cancel_scheduled_refreshes(self) -> None:

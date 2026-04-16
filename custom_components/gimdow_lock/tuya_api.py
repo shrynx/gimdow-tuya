@@ -190,6 +190,27 @@ class TuyaCloudAPI:
         result = await self._request("GET", f"/v1.0/devices/{device_id}")
         return result.get("result", {})
 
+    async def async_get_open_logs(
+        self, device_id: str, minutes: int = 10
+    ) -> list[dict[str, Any]]:
+        """Get recent door lock open/close logs.
+
+        Returns a list of log entries, most recent first.
+        Each entry has 'status' (dict with 'code' and 'value') and 'update_time'.
+        """
+        await self.async_get_token()
+
+        now_ms = int(time.time() * 1000)
+        start_ms = now_ms - (minutes * 60 * 1000)
+        path = (
+            f"/v1.0/devices/{device_id}/door-lock/open-logs"
+            f"?page_no=1&page_size=5&start_time={start_ms}&end_time={now_ms}"
+        )
+        result = await self._request("GET", path)
+        logs = result.get("result", {}).get("logs", [])
+        _LOGGER.debug("Open logs for %s: %s", device_id, logs)
+        return logs
+
     async def _get_password_ticket(self, device_id: str) -> str | None:
         """Get password ticket for lock operations."""
         try:

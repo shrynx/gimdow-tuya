@@ -73,36 +73,17 @@ class GimdowLock(CoordinatorEntity[GimdowLockCoordinator], LockEntity):
         """Return if entity is available."""
         return self.coordinator.last_update_success and self.coordinator.data.get("online", False)
 
-    @staticmethod
-    def _is_truthy(value: Any) -> bool:
-        """Interpret a Tuya data point value as a boolean.
-
-        Tuya may return a real bool, a string like "true"/"false",
-        or an int (0/1).  Normalise them all so state logic is correct.
-        """
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            return value.lower() in ("true", "1", "yes")
-        return bool(value)
-
     @property
     def is_locked(self) -> bool | None:
-        """Return true if lock is locked."""
-        status = self.coordinator.data.get("status", {})
+        """Return true if lock is locked.
 
-        # lock_motor_state: True = locked, False = unlocked
-        if "lock_motor_state" in status:
-            return self._is_truthy(status["lock_motor_state"])
-
-        # Fallback to closed_opened
-        if "closed_opened" in status:
-            value = status["closed_opened"]
-            if isinstance(value, str):
-                return value.lower() == "closed"
-            return not self._is_truthy(value)
-
-        return None
+        Uses open-logs from the Tuya Smart Lock API to determine state,
+        since lock_motor_state from the status endpoint doesn't change
+        on some lock models.
+        """
+        if self.coordinator.data is None:
+            return None
+        return not self.coordinator.data.get("is_unlocked", False)
 
     @property
     def icon(self) -> str:
