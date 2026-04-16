@@ -61,6 +61,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if unload_ok:
         coordinator: GimdowLockCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
+        coordinator._cancel_scheduled_refreshes()
         await coordinator.api.async_close()
 
     return unload_ok

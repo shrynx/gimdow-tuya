@@ -22,3 +22,6 @@ LOCK_CATEGORIES = ["ms", "jtmspro", "jtmsbh", "wf_jtmspro", "videolock", "lock"]
 
 # Update interval in seconds
 UPDATE_INTERVAL = 30
+
+# How often to re-fetch device info (online status etc.) in seconds
+DEVICE_INFO_REFRESH_INTERVAL = 300
