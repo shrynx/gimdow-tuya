@@ -13,7 +13,9 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_DEVICE_NAME,
     CONF_REGION,
+    CONF_UPDATE_INTERVAL,
     DOMAIN,
+    UPDATE_INTERVAL,
 )
 from .coordinator import GimdowLockCoordinator
 from .tuya_api import TuyaCloudAPI
@@ -34,12 +36,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         region=entry.data[CONF_REGION],
     )
 
-    # Create coordinator
+    # Create coordinator with user-configured (or default) update interval
+    update_interval = entry.options.get(CONF_UPDATE_INTERVAL, UPDATE_INTERVAL)
     coordinator = GimdowLockCoordinator(
         hass=hass,
         api=api,
         device_id=entry.data[CONF_DEVICE_ID],
         device_name=entry.data[CONF_DEVICE_NAME],
+        update_interval=update_interval,
     )
 
     # Fetch initial data
@@ -48,10 +52,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store coordinator
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    # Reload the entry when options change so the new interval takes effect.
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the integration when options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

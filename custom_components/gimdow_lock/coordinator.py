@@ -15,7 +15,7 @@ from .tuya_api import TuyaAPIError, TuyaCloudAPI
 _LOGGER = logging.getLogger(__name__)
 
 # Delays (in seconds) for extra refreshes after a lock/unlock operation.
-_POST_OPERATION_DELAYS = (10, 120, 300)
+_POST_OPERATION_DELAYS = (150, 300)
 
 
 class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -27,13 +27,14 @@ class GimdowLockCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         api: TuyaCloudAPI,
         device_id: str,
         device_name: str,
+        update_interval: int = UPDATE_INTERVAL,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=f"{DOMAIN}_{device_id}",
-            update_interval=timedelta(seconds=UPDATE_INTERVAL),
+            update_interval=timedelta(seconds=update_interval),
         )
         self.api = api
         self.device_id = device_id

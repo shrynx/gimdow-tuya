@@ -8,6 +8,7 @@ CONF_CLIENT_SECRET = "client_secret"
 CONF_DEVICE_ID = "device_id"
 CONF_DEVICE_NAME = "device_name"
 CONF_REGION = "region"
+CONF_UPDATE_INTERVAL = "update_interval"
 
 # Tuya API regions
 TUYA_REGIONS = {
@@ -20,5 +21,5 @@ TUYA_REGIONS = {
 # Lock categories in Tuya
 LOCK_CATEGORIES = ["ms", "jtmspro", "jtmsbh", "wf_jtmspro", "videolock", "lock"]
 
-# Update interval in seconds
-UPDATE_INTERVAL = 30
+# Default update interval in seconds (user-configurable via options)
+UPDATE_INTERVAL = 300

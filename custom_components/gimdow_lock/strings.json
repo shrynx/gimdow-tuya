@@ -32,7 +32,10 @@
     "step": {
       "init": {
         "title": "Options",
-        "description": "Configure Gimdow Lock options."
+        "description": "Configure how often Home Assistant polls the Tuya Cloud for lock state.",
+        "data": {
+          "update_interval": "Update interval (seconds, 30–3600)"
+        }
       }
     }
   }

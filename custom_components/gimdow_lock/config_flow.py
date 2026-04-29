@@ -16,7 +16,9 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_DEVICE_NAME,
     CONF_REGION,
+    CONF_UPDATE_INTERVAL,
     DOMAIN,
+    UPDATE_INTERVAL,
 )
 from .tuya_api import TuyaAPIError, TuyaCloudAPI
 
@@ -62,15 +64,13 @@ class GimdowLockConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
             try:
-                if await self._api.async_get_token():
-                    self._devices = await self._api.async_get_devices()
+                await self._api.async_get_token()
+                self._devices = await self._api.async_get_devices()
 
-                    if not self._devices:
-                        errors["base"] = "no_devices"
-                    else:
-                        return await self.async_step_select_device()
+                if not self._devices:
+                    errors["base"] = "no_devices"
                 else:
-                    errors["base"] = "invalid_auth"
+                    return await self.async_step_select_device()
             except TuyaAPIError as err:
                 _LOGGER.error("API error: %s", err)
                 errors["base"] = "cannot_connect"
@@ -169,7 +169,17 @@ class GimdowLockOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        current_interval = self.config_entry.options.get(
+            CONF_UPDATE_INTERVAL, UPDATE_INTERVAL
+        )
+
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({}),
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_UPDATE_INTERVAL, default=current_interval
+                    ): vol.All(vol.Coerce(int), vol.Range(min=30, max=3600)),
+                }
+            ),
         )
